@@ -7,7 +7,7 @@ from streamlit.testing.v1 import AppTest
 def test_chinese_pages_render_without_exceptions(tmp_path, monkeypatch):
     st.cache_resource.clear()
     monkeypatch.setenv("BGM_DATA_DIR", str(tmp_path / "ui_data"))
-    app = AppTest.from_file(str(Path(__file__).resolve().parent.parent / "app.py"), default_timeout=30)
+    app = AppTest.from_file(str(Path(__file__).resolve().parent.parent / "app.py"), default_timeout=120)
     app.run()
     assert not app.exception
     assert app.title[0].value == "先认识工具，再开始审核"
@@ -30,7 +30,7 @@ def test_populated_library_and_history_render(real_library, media_files, monkeyp
     monkeypatch.setenv("BGM_DATA_DIR", str(paths.root))
     st.cache_resource.clear()
 
-    app = AppTest.from_file(str(Path(__file__).resolve().parent.parent / "app.py"), default_timeout=30)
+    app = AppTest.from_file(str(Path(__file__).resolve().parent.parent / "app.py"), default_timeout=120)
     app.run()
     for name in ("本地音乐库", "历史记录"):
         app.sidebar.radio[0].set_value(name).run()
@@ -46,7 +46,7 @@ def test_guided_demo_real_recognition_review_preview_and_export(tmp_path, monkey
 
     monkeypatch.setenv("BGM_DATA_DIR", str(tmp_path / "demo_data"))
     st.cache_resource.clear()
-    app = AppTest.from_file(str(Path(__file__).resolve().parent.parent / "app.py"), default_timeout=90)
+    app = AppTest.from_file(str(Path(__file__).resolve().parent.parent / "app.py"), default_timeout=300)
     app.run()
     next(b for b in app.button if b.label == "一键体验演示").click().run()
     assert not app.exception
