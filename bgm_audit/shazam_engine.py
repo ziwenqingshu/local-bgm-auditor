@@ -1,27 +1,39 @@
+"""可选的 ShazamIO 联网识别。默认关闭，不属于离线流程。"""
+
+from __future__ import annotations
+
 import asyncio
 import time
+from collections.abc import Callable
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from .media import slice_wav
 from .models import Detection, EngineError
 
+if TYPE_CHECKING:
+    from .config import Settings
 
-def client_factory(window=12):
+
+def client_factory(window: float = 12) -> Any:
     try:
+        from aiohttp_retry import ExponentialRetry
         from shazamio import Shazam
         from shazamio.client import HTTPClient
-        from aiohttp_retry import ExponentialRetry
     except ImportError as exc:
         raise RuntimeError("未安装可选 ShazamIO；运行安装脚本的 --with-shazam 模式") from exc
     # 禁用库内嵌重试，所有尝试次数由本应用的 retries 参数控制。
-    return Shazam(segment_duration_seconds=round(window),
-                  http_client=HTTPClient(retry_options=ExponentialRetry(attempts=1)))
+    return Shazam(
+        segment_duration_seconds=round(window),
+        http_client=HTTPClient(retry_options=ExponentialRetry(attempts=1)),
+    )
 
 
 class ProtocolError(RuntimeError):
     pass
 
 
-def classify_error(exc):
+def classify_error(exc: BaseException) -> tuple[str, str]:
     text = str(exc)
     if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
         return "超时", "Shazam 请求超时"
@@ -36,7 +48,7 @@ def classify_error(exc):
     return "服务异常", f"{type(exc).__name__}：{text[:250]}"
 
 
-def parse_response(response, start, end, index):
+def parse_response(response: Any, start: float, end: float, index: int) -> Detection | None:
     if not isinstance(response, dict):
         raise ProtocolError("预期 JSON 对象")
     track = response.get("track")
@@ -54,18 +66,34 @@ def parse_response(response, start, end, index):
                 ids["apple_music_id"] = action["id"]
     title, artist = track["title"], track.get("subtitle", "")
     track_id = str(track.get("key") or track.get("isrc") or f"{title}|{artist}")
-    return Detection("shazam", track_id, title, artist, start, end, "识别切片覆盖区间（估计）",
-                     [dict(segment_index=index, window_start=start, window_end=end)], ids)
+    return Detection(
+        "shazam",
+        track_id,
+        title,
+        artist,
+        start,
+        end,
+        "识别切片覆盖区间（估计）",
+        [dict(segment_index=index, window_start=start, window_end=end)],
+        ids,
+    )
 
 
 class ShazamScanner:
-    def __init__(self, settings, factory=None):
+    def __init__(self, settings: Settings, factory: Callable[[], Any] | None = None) -> None:
         self.settings = settings
         self.factory = factory or (lambda: client_factory(settings.shazam_window))
-        self._last_request = None
+        self._last_request: float | None = None
 
-    async def scan(self, audio, ranges, work, progress=None):
-        detections, errors = [], []
+    async def scan(
+        self,
+        audio: Path,
+        ranges: list[tuple[float, float]],
+        work: Path,
+        progress: Callable[[int, int, str], Any] | None = None,
+    ) -> tuple[list[Detection], list[EngineError]]:
+        detections: list[Detection] = []
+        errors: list[EngineError] = []
         try:
             async with self.factory() as shazam:
                 for index, (start, end) in enumerate(ranges):
@@ -89,13 +117,13 @@ class ShazamScanner:
                                 kind, message = classify_error(exc)
                                 retryable = kind not in ("接口变更", "依赖缺失")
                                 if attempt == self.settings.retries or not retryable:
-                                    errors.append(EngineError("shazam", kind, message, start, end, attempt+1))
+                                    errors.append(EngineError("shazam", kind, message, start, end, attempt + 1))
                                     break
                                 await asyncio.sleep(min(2**attempt, 8))
                     finally:
                         clip.unlink(missing_ok=True)
                     if progress:
-                        progress(index+1, len(ranges), f"Shazam：{start:.1f}–{end:.1f} 秒")
+                        progress(index + 1, len(ranges), f"Shazam：{start:.1f}–{end:.1f} 秒")
         except Exception as exc:
             kind, message = classify_error(exc)
             errors.append(EngineError("shazam", kind, message))

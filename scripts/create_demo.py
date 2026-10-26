@@ -1,6 +1,7 @@
 """生成原创合成参考曲和双曲视频；不会联网或自动导入用户曲库。"""
-from pathlib import Path
+
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from bgm_audit.config import Paths

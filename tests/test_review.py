@@ -3,8 +3,16 @@ from bgm_audit.review import authorization_status, merge_detections, review_dete
 
 
 def hit(start=0, end=12, index=0, engine="shazam", title="星河"):
-    return Detection(engine, "track-one", title, "创作者", start, end, "估计",
-                     [dict(segment_index=index, window_start=start, window_end=end)])
+    return Detection(
+        engine,
+        "track-one",
+        title,
+        "创作者",
+        start,
+        end,
+        "估计",
+        [dict(segment_index=index, window_start=start, window_end=end)],
+    )
 
 
 def test_consecutive_slices_merge_and_keep_original_windows():
@@ -21,8 +29,13 @@ def test_nonconsecutive_same_song_does_not_bridge_failed_or_different_slice():
 
 
 def test_authorization_requires_evidence_verified_and_exact_purpose():
-    license_info = dict(status="已登记授权", verified=True, coverage="覆盖已选用途",
-                        purposes=["漫剧商业发布"], evidence="授权书.pdf")
+    license_info = dict(
+        status="已登记授权",
+        verified=True,
+        coverage="覆盖已选用途",
+        purposes=["漫剧商业发布"],
+        evidence="授权书.pdf",
+    )
     assert authorization_status(license_info, "漫剧商业发布")[0] == "授权已核验"
     assert authorization_status(license_info, "电影发布")[0] == "待核验"
     assert authorization_status(dict(license_info, verified=False), "漫剧商业发布")[0] == "待核验"

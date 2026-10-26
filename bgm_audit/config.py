@@ -1,8 +1,12 @@
-from dataclasses import asdict, dataclass
-from pathlib import Path
+"""扫描参数与本地数据目录。"""
+
+from __future__ import annotations
+
 import json
 import os
 import tempfile
+from dataclasses import asdict, dataclass, fields
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -20,9 +24,11 @@ class Settings:
     min_match_seconds: float = 1.0
     merge_gap: float = 1.5
 
-    def validate(self):
-        for window, step in ((self.shazam_window, self.shazam_step),
-                             (self.local_window, self.local_step)):
+    def validate(self) -> Settings:
+        for window, step in (
+            (self.shazam_window, self.shazam_step),
+            (self.local_window, self.local_step),
+        ):
             if not 1 <= step <= window <= 120:
                 raise ValueError("切片参数须满足 1 ≤ 步长 ≤ 窗口 ≤ 120 秒")
         # 官方当前签名窗口支持至 12 秒；15 秒起无法有效识别。
@@ -40,8 +46,10 @@ class Settings:
 
 
 class Paths:
-    def __init__(self, root=None):
-        self.root = Path(root or os.environ.get("BGM_DATA_DIR", ROOT / "data")).resolve()
+    def __init__(self, root: str | os.PathLike[str] | None = None) -> None:
+        # 空的 BGM_DATA_DIR 视为未设置，避免把数据写进当前工作目录。
+        base = root or os.environ.get("BGM_DATA_DIR") or ROOT / "data"
+        self.root = Path(base).expanduser().resolve()
         self.library = self.root / "library"
         self.videos = self.root / "videos"
         self.temp = self.root / "temp"
@@ -52,18 +60,22 @@ class Paths:
         for directory in (self.root, self.library, self.videos, self.temp, self.previews):
             directory.mkdir(parents=True, exist_ok=True)
 
-    def load_settings(self):
+    def load_settings(self) -> Settings:
+        """读取设置；文件损坏或取值无效时回退默认值，忽略旧版本遗留的未知字段。"""
         target = self.root / "settings.json"
         if not target.exists():
             return Settings()
         try:
-            return Settings(**json.loads(target.read_text(encoding="utf-8"))).validate()
+            raw = json.loads(target.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                return Settings()
+            known = {f.name for f in fields(Settings)}
+            return Settings(**{k: v for k, v in raw.items() if k in known}).validate()
         except (ValueError, TypeError):
             return Settings()
 
-    def save_settings(self, settings):
+    def save_settings(self, settings: Settings) -> None:
         settings.validate()
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=self.root,
-                                         delete=False, suffix=".json") as f:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=self.root, delete=False, suffix=".json") as f:
             json.dump(asdict(settings), f, ensure_ascii=False, indent=2)
         os.replace(f.name, self.root / "settings.json")
