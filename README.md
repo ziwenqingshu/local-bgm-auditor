@@ -162,3 +162,35 @@ set "BGM_LIVE_AUDIO=C:\Music\歌曲.mp3"
 `app.py` 为中文界面；`bgm_audit/media.py` 负责媒体处理；`fingerprint.py` 封装 audfprint；`shazam_engine.py` 负责可选联网识别；`review.py` 负责合并和审核；`storage.py` 负责 SQLite；`service.py` 负责流水线；`reports.py` 导出报告。
 
 audfprint 源码随项目附带，固定提交见 [第三方说明](THIRD_PARTY_NOTICES.md)，无需安装时再访问 GitHub。未附带上游仓库中的商业音乐测试样本，本项目测试使用自生成数据。完整许可证见 `LICENSE` 和各依赖许可证。
+
+## Git 版本管理
+
+项目使用 `main` 作为主分支。Git 记录源码、安装脚本、测试、许可证和示例文档；`.venv/`、`data/`、缓存、日志、密钥配置和 ZIP 发行包不入库。曲库、授权材料和真实视频应按上方“数据与备份”说明单独备份。
+
+查看当前版本和修改：
+
+```bash
+git status
+git log --oneline -5
+git diff
+git remote -v
+```
+
+修改功能时，建议先创建分支，测试通过后再提交：
+
+```bash
+git switch -c feature/功能名称
+# 修改代码后运行测试；Windows 改用 .venv\Scripts\python.exe
+.venv/bin/python -m pytest -q
+git add app.py bgm_audit tests README.md
+git diff --cached
+git commit -m "feat: 描述本次功能变更"
+```
+
+GitHub 登录、远端仓库创建及绑定完成后，可推送当前分支：
+
+```bash
+git push -u origin HEAD
+```
+
+GitHub 账号与 Codex / ChatGPT 账号相互独立。不要将访问令牌写入项目或提交到 Git，也不要用强制推送覆盖不明来源的远端历史。
