@@ -1,5 +1,6 @@
 """边界情况：损坏文件、无音轨、多音轨、音轨偏移、重叠歌曲、空曲库及各类输入校验。"""
 
+import dataclasses
 import subprocess
 import wave
 from pathlib import Path
@@ -149,21 +150,32 @@ def test_audio_starting_after_video_keeps_video_timeline(real_library, media_fil
     assert all(abs(o + 3) < 0.3 for o in offsets(task, one["id"]))
 
 
-def test_audio_starting_before_video_is_trimmed_to_video_origin(real_library, media_files, tmp_path):
+def test_negative_audio_offset_trims_leading_audio(media_files, tmp_path):
+    """音轨早于画面开始时，按采样点裁掉多出的前段，保证时间轴以画面起点为 0。"""
+    video = media_files["video"]
+    info = probe(video)
+    full = extract_audio(video, tmp_path / "full.wav", info)
+    early = dataclasses.replace(info, audio_offset=-2.0)
+    trimmed = extract_audio(video, tmp_path / "trimmed.wav", early)
+    with wave.open(str(full)) as a, wave.open(str(trimmed)) as b:
+        assert abs(b.getnframes() / RATE - info.duration) < 0.05
+        a.setpos(2 * RATE)
+        expected = np.frombuffer(a.readframes(8 * RATE), dtype="<i2").astype(int)
+        actual = np.frombuffer(b.readframes(8 * RATE), dtype="<i2").astype(int)
+    assert np.max(np.abs(expected - actual)) <= 1
+
+
+def test_audio_starting_before_video_keeps_video_timeline(real_library, media_files, tmp_path):
     _, _, service, one, _ = real_library
     video = tmp_path / "音轨早开始.mp4"
     run_ffmpeg(["-itsoffset", 2, "-f", "lavfi", "-i", "color=s=160x90:r=10:d=14",
                 "-i", media_files["refs"][0], "-t", 16, "-c:v", "libx264", "-preset", "ultrafast",
                 "-c:a", "aac", video])  # fmt: skip
+    # 不同 FFmpeg 版本的 MP4 复用器可能保留 -2 秒偏移，也可能整体平移为 0；两种情况时间轴都要一致。
     info = probe(video)
-    assert -2.2 < info.audio_offset < -1.8
-    wav = extract_audio(video, tmp_path / "trimmed.wav", info)
-    with wave.open(str(wav)) as reader:
-        assert abs(reader.getnframes() / RATE - info.duration) < 0.05
     task = service.audit(video, ["audfprint"], "漫剧商业发布", Settings())
-    # 视频 0 秒对应参考曲 2 秒：参考时间 - 视频时间 ≈ +2。
     found = offsets(task, one["id"])
-    assert found and all(abs(o - 2) < 0.3 for o in found)
+    assert found and all(abs(o + info.audio_offset) < 0.3 for o in found)
 
 
 def test_overlapping_songs_in_one_window_are_both_found(real_library, media_files, tmp_path):
