@@ -21,3 +21,15 @@ htmlcov/
 build/
 dist/
 *.egg-info/
+coverage.xml
+.hypothesis/
+
+# 音视频素材不入库（曲库、待审核视频和演示素材都由本地生成或用户自备）
+*.mp3
+*.wav
+*.flac
+*.m4a
+*.aac
+*.mp4
+*.mov
+*.mkv

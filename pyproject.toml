@@ -1,11 +1,106 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "local-bgm-auditor"
-version = "1.0.0"
-description = "本地漫剧 BGM 识别与授权记录复核工具"
+version = "0.1.0"
+description = "离线识别短剧 / 漫剧视频中的背景音乐，并按授权登记逐项复核（FFmpeg + audfprint + SQLite + Streamlit）"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md", "vendor/audfprint/LICENSE"]
+authors = [{ name = "Zhixin Qin" }]
 requires-python = ">=3.12,<3.13"
+keywords = ["audio-fingerprinting", "bgm", "copyright", "audfprint", "streamlit", "ffmpeg", "offline"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Intended Audience :: End Users/Desktop",
+    "Natural Language :: Chinese (Simplified)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+    "Topic :: Multimedia :: Video",
+]
+# 与 requirements.txt 保持一致；应用按精确版本验证。
+dependencies = [
+    "streamlit==1.66.1",
+    "numpy==1.26.4",
+    "pyarrow==20.0.0",
+    "pandas==2.3.3",
+    "scipy==1.17.1",
+    "psutil==7.2.2",
+    "filelock==3.32.7",
+]
+
+[project.optional-dependencies]
+shazam = ["shazamio==0.9.0"]
+dev = [
+    "pytest==9.1.1",
+    "pytest-cov>=6",
+    "ruff==0.17.2",
+    "mypy==2.4.0",
+    "pre-commit>=4",
+]
+
+[project.urls]
+Homepage = "https://github.com/ziwenqingshu/local-bgm-auditor"
+Issues = "https://github.com/ziwenqingshu/local-bgm-auditor/issues"
+Changelog = "https://github.com/ziwenqingshu/local-bgm-auditor/blob/main/CHANGELOG.md"
+
+[tool.setuptools]
+packages = ["bgm_audit"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-ra"
 markers = ["live: 需要主动启用并联网的 Shazam 真实接口测试"]
+
+[tool.coverage.run]
+source = ["bgm_audit"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["vendor"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "C4", "PL", "S", "BLE"]
+ignore = [
+    "RUF001", "RUF002", "RUF003",  # 中文全角标点是有意的
+    "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR2004", "PLC0415",
+    "S603", "S607",  # 以参数列表调用本机 ffmpeg/ffprobe，不经过 shell
+    "C408",  # dict(key=value) 用于结构化记录，可读性更好
+    "SIM117",
+    "PLR0917",  # 公共 API 保持与 v0 相同的位置参数
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "PLR2004", "S108", "BLE001", "RUF059"]
+# 界面层把任何异常转成可读的错误提示；中文界面文案不强制折行。
+"app.py" = ["BLE001", "E501"]
+# 流水线边界：任何单段失败都记录为 EngineError，而不是中断整批审核。
+"bgm_audit/service.py" = ["BLE001"]
+"bgm_audit/shazam_engine.py" = ["BLE001"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["bgm_audit"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["bgm_audit"]
+strict = true
+warn_unreachable = true
+disallow_any_generics = false
+
+[[tool.mypy.overrides]]
+module = ["shazamio.*", "aiohttp_retry", "audfprint_analyze", "audfprint_match", "hash_table"]
+ignore_missing_imports = true

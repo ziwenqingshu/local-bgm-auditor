@@ -1,9 +1,10 @@
 """只检查本地依赖，不发网络请求。"""
-from pathlib import Path
+
 import importlib.metadata
 import platform
 import shutil
 import sys
+from pathlib import Path
 
 root = Path(__file__).resolve().parent.parent
 errors = []
@@ -15,7 +16,7 @@ for executable in ("ffmpeg", "ffprobe"):
     print(f"{executable}: {location or 'MISSING'}")
     if not location:
         errors.append(f"Missing {executable}")
-for package in ("streamlit", "numpy", "scipy", "pandas", "pyarrow", "psutil", "filelock", "pytest"):
+for package in ("streamlit", "numpy", "scipy", "pandas", "pyarrow", "psutil", "filelock"):
     try:
         print(f"{package}: {importlib.metadata.version(package)}")
     except importlib.metadata.PackageNotFoundError:

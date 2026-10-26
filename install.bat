@@ -43,6 +43,8 @@ set "REQ=requirements.txt"
 if /i "%~1"=="--with-shazam" set "REQ=requirements-shazam.txt"
 %PIP_CMD% -r %REQ%
 if errorlevel 1 goto fail
+if /i "%~1"=="--dev" %PIP_CMD% -r requirements-dev.txt
+if errorlevel 1 goto fail
 .venv\Scripts\python.exe scripts\check_environment.py
 if errorlevel 1 goto fail
 echo Installation complete. Run start.bat
