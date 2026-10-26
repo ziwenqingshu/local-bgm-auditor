@@ -1,0 +1,23 @@
+.venv/
+__pycache__/
+.pytest_cache/
+data/
+*.pyc
+.DS_Store
+
+# 本机配置、凭据和日志
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+*.log
+.coverage
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+
+# 发行包由源码重新生成
+*.zip
+build/
+dist/
+*.egg-info/

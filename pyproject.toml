@@ -1,0 +1,11 @@
+[project]
+name = "local-bgm-auditor"
+version = "1.0.0"
+description = "本地漫剧 BGM 识别与授权记录复核工具"
+requires-python = ">=3.12,<3.13"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"
+markers = ["live: 需要主动启用并联网的 Shazam 真实接口测试"]

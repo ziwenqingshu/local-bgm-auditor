@@ -1,0 +1,9 @@
+streamlit==1.66.1
+numpy==1.26.4
+# 新版 PyArrow 的运行时要求 NumPy 2；audfprint 保持 NumPy 1.26。
+pyarrow==20.0.0
+pandas==2.3.3
+scipy==1.17.1
+psutil==7.2.2
+filelock==3.32.7
+pytest==9.1.1
