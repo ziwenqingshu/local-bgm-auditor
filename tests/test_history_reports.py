@@ -1,20 +1,20 @@
-from dataclasses import asdict
-from pathlib import Path
-from unittest.mock import AsyncMock
 import csv
 import io
 import json
+from dataclasses import asdict
+from pathlib import Path
+
+from test_shazam import FakeShazam
 
 from bgm_audit.config import Settings
 from bgm_audit.models import Detection
 from bgm_audit.reports import export_csv, export_json
 from bgm_audit.storage import Store
-from test_shazam import FakeShazam
 
 
 def test_history_persists_review_exports_and_deletion(env, media_files):
     paths, store, service = env
-    fake = FakeShazam([{"track": {"key": "42", "title": "=曲名", "subtitle": "歌手"}}]*3)
+    fake = FakeShazam([{"track": {"key": "42", "title": "=曲名", "subtitle": "歌手"}}] * 3)
     settings = Settings(request_interval=0, retries=0)
     task = service.audit(media_files["video"], ["shazam"], "漫剧商业发布", settings, shazam_factory=lambda: fake)
     assert task["state"] == "completed" and not task["errors"]
@@ -39,9 +39,14 @@ def test_history_persists_review_exports_and_deletion(env, media_files):
 
 def test_network_failure_saved_in_history(env, media_files):
     paths, store, service = env
-    fake = FakeShazam([OSError("offline")]*3)
-    task = service.audit(media_files["video"], ["shazam"], "用途", Settings(retries=0, request_interval=0),
-                         shazam_factory=lambda: fake)
+    fake = FakeShazam([OSError("offline")] * 3)
+    task = service.audit(
+        media_files["video"],
+        ["shazam"],
+        "用途",
+        Settings(retries=0, request_interval=0),
+        shazam_factory=lambda: fake,
+    )
     assert task["status"] == "识别不完整"
     assert len(task["errors"]) == 3
     assert all(e["kind"] == "网络失败" for e in task["errors"])

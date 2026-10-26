@@ -1,13 +1,13 @@
 from pathlib import Path
 
-from streamlit.testing.v1 import AppTest
 import streamlit as st
+from streamlit.testing.v1 import AppTest
 
 
 def test_chinese_pages_render_without_exceptions(tmp_path, monkeypatch):
     st.cache_resource.clear()
-    monkeypatch.setenv("BGM_DATA_DIR", str(tmp_path/"ui_data"))
-    app = AppTest.from_file(str(Path(__file__).resolve().parent.parent/"app.py"), default_timeout=30)
+    monkeypatch.setenv("BGM_DATA_DIR", str(tmp_path / "ui_data"))
+    app = AppTest.from_file(str(Path(__file__).resolve().parent.parent / "app.py"), default_timeout=30)
     app.run()
     assert not app.exception
     assert app.title[0].value == "先认识工具，再开始审核"
@@ -23,13 +23,14 @@ def test_chinese_pages_render_without_exceptions(tmp_path, monkeypatch):
 
 def test_populated_library_and_history_render(real_library, media_files, monkeypatch):
     from bgm_audit.config import Settings
+
     paths, store, service, _, _ = real_library
     task = service.audit(media_files["video"], ["audfprint"], "漫剧商业发布", Settings())
     store.review(task["id"], "界面测试复查", "已人工复核")
     monkeypatch.setenv("BGM_DATA_DIR", str(paths.root))
     st.cache_resource.clear()
 
-    app = AppTest.from_file(str(Path(__file__).resolve().parent.parent/"app.py"), default_timeout=30)
+    app = AppTest.from_file(str(Path(__file__).resolve().parent.parent / "app.py"), default_timeout=30)
     app.run()
     for name in ("本地音乐库", "历史记录"):
         app.sidebar.radio[0].set_value(name).run()
@@ -40,12 +41,12 @@ def test_populated_library_and_history_render(real_library, media_files, monkeyp
 
 def test_guided_demo_real_recognition_review_preview_and_export(tmp_path, monkeypatch):
     from bgm_audit.config import Paths
-    from bgm_audit.storage import Store
     from bgm_audit.reports import export_csv, export_json
+    from bgm_audit.storage import Store
 
     monkeypatch.setenv("BGM_DATA_DIR", str(tmp_path / "demo_data"))
     st.cache_resource.clear()
-    app = AppTest.from_file(str(Path(__file__).resolve().parent.parent/"app.py"), default_timeout=90)
+    app = AppTest.from_file(str(Path(__file__).resolve().parent.parent / "app.py"), default_timeout=90)
     app.run()
     next(b for b in app.button if b.label == "一键体验演示").click().run()
     assert not app.exception

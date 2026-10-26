@@ -1,4 +1,9 @@
+"""识别结果与引擎错误的数据结构，序列化后写入 SQLite 和报告。"""
+
+from __future__ import annotations
+
 from dataclasses import asdict, dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -16,7 +21,7 @@ class Detection:
     reason: str = "识别结果需与授权材料核对"
     license_snapshot: dict = field(default_factory=dict)
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -29,5 +34,5 @@ class EngineError:
     end: float | None = None
     attempts: int = 1
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)

@@ -1,7 +1,6 @@
 import asyncio
-from pathlib import Path
-from unittest.mock import AsyncMock
 import os
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -36,12 +35,11 @@ def test_real_response_parsing_and_window_estimates():
 
 def test_network_failure_is_incomplete_and_client_closes(media_files, tmp_path):
     fake = FakeShazam([OSError("network unreachable")])
-    found, errors = asyncio.run(ShazamScanner(config(), lambda: fake).scan(
-        media_files["audio"], [(6, 18)], tmp_path))
+    found, errors = asyncio.run(ShazamScanner(config(), lambda: fake).scan(media_files["audio"], [(6, 18)], tmp_path))
     assert found == []
     assert errors[0].kind == "网络失败" and errors[0].start == 6
     assert errors[0].attempts == 1 and fake.closed
-    assert not (tmp_path/"shazam.wav").exists()
+    assert not (tmp_path / "shazam.wav").exists()
 
 
 def test_limited_retry_then_success(media_files, tmp_path, monkeypatch):
@@ -49,8 +47,7 @@ def test_limited_retry_then_success(media_files, tmp_path, monkeypatch):
     monkeypatch.setattr("bgm_audit.shazam_engine.asyncio.sleep", AsyncMock())
     settings = config()
     settings.retries = 1
-    found, errors = asyncio.run(ShazamScanner(settings, lambda: fake).scan(
-        media_files["audio"], [(0, 12)], tmp_path))
+    found, errors = asyncio.run(ShazamScanner(settings, lambda: fake).scan(media_files["audio"], [(0, 12)], tmp_path))
     assert len(found) == 1 and not errors
     assert fake.recognize.await_count == 2 and fake.closed
 
@@ -58,8 +55,7 @@ def test_limited_retry_then_success(media_files, tmp_path, monkeypatch):
 @pytest.mark.parametrize("response,expected", [({"matches": []}, None), ({"unexpected": "changed"}, "接口变更")])
 def test_no_match_vs_protocol_change(media_files, tmp_path, response, expected):
     fake = FakeShazam([response])
-    found, errors = asyncio.run(ShazamScanner(config(), lambda: fake).scan(
-        media_files["audio"], [(0, 12)], tmp_path))
+    found, errors = asyncio.run(ShazamScanner(config(), lambda: fake).scan(media_files["audio"], [(0, 12)], tmp_path))
     assert not found
     assert (errors[0].kind if errors else None) == expected
     assert fake.closed
@@ -68,16 +64,17 @@ def test_no_match_vs_protocol_change(media_files, tmp_path, response, expected):
 @pytest.mark.parametrize("error,kind", [(TimeoutError(), "超时"), (RuntimeError("HTTP 429"), "服务限流")])
 def test_timeout_and_rate_limit(media_files, tmp_path, error, kind):
     fake = FakeShazam([error])
-    found, errors = asyncio.run(ShazamScanner(config(), lambda: fake).scan(
-        media_files["audio"], [(0, 12)], tmp_path))
+    found, errors = asyncio.run(ShazamScanner(config(), lambda: fake).scan(media_files["audio"], [(0, 12)], tmp_path))
     assert errors[0].kind == kind and fake.closed
 
 
 def test_factory_closes_real_shazam_client_without_network():
     pytest.importorskip("shazamio")
+
     async def check():
         async with client_factory() as client:
             assert callable(client.recognize)
+
     asyncio.run(check())
 
 
@@ -87,7 +84,7 @@ def test_live_shazam_with_user_provided_music(tmp_path):
     if not source:
         pytest.skip("主动设置 BGM_LIVE_AUDIO 为你有权用于识别的音乐路径才联网测试")
     pytest.importorskip("shazamio")
-    audio = extract_audio(source, tmp_path/"live.wav")
+    audio = extract_audio(source, tmp_path / "live.wav")
     settings = Settings(retries=1)
     found, errors = asyncio.run(ShazamScanner(settings).scan(audio, [(0, 12)], tmp_path))
     assert not errors, [e.to_dict() for e in errors]

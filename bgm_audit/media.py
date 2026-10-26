@@ -1,10 +1,19 @@
-from dataclasses import dataclass
-from pathlib import Path
+"""FFmpeg / FFprobe 封装：探测、标准化音轨、切片与预览。"""
+
+from __future__ import annotations
+
 import json
 import math
+import os
 import shutil
 import subprocess
 import wave
+from collections.abc import Iterable
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+PathLike = str | os.PathLike[str]
 
 
 class MediaError(RuntimeError):
@@ -24,33 +33,54 @@ class MediaInfo:
     audio_offset: float = 0.0
 
 
-def check_ffmpeg():
+def check_ffmpeg() -> None:
     missing = [name for name in ("ffmpeg", "ffprobe") if not shutil.which(name)]
     if missing:
         raise MediaError("缺少 " + "、".join(missing) + "，请先运行安装脚本并重启终端")
 
 
-def run_ffmpeg(args, timeout=600):
+def run_ffmpeg(args: Iterable[Any], timeout: float = 600) -> None:
     check_ffmpeg()
     try:
-        result = subprocess.run(["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
-                                 "-y", *map(str, args)], capture_output=True,
-                                text=True, encoding="utf-8", errors="replace", timeout=timeout)
+        result = subprocess.run(
+            ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y", *map(str, args)],
+            capture_output=True,
+            check=False,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+        )
     except subprocess.TimeoutExpired as exc:
         raise MediaError("FFmpeg 处理超时；请缩短视频或检查文件") from exc
     if result.returncode:
         raise MediaError("FFmpeg 处理失败：" + result.stderr[-1500:])
 
 
-def probe(path):
+def _number(value: Any, default: float = 0.0) -> float:
+    """FFprobe 偶尔给出 "N/A" 或缺省值；无法解析时使用默认值。"""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return number if math.isfinite(number) else default
+
+
+def probe(path: PathLike) -> MediaInfo:
     check_ffmpeg()
     path = Path(path).resolve()
     if not path.is_file():
         raise MediaError("文件不存在：" + str(path))
     try:
-        result = subprocess.run(["ffprobe", "-v", "error", "-show_format", "-show_streams",
-                                 "-of", "json", str(path)], capture_output=True, text=True,
-                                encoding="utf-8", errors="replace", timeout=30, check=True)
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_format", "-show_streams", "-of", "json", str(path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=True,
+        )
         data = json.loads(result.stdout)
     except (subprocess.SubprocessError, ValueError) as exc:
         raise MediaError("无法读取媒体信息，文件可能损坏或格式不支持") from exc
@@ -59,16 +89,21 @@ def probe(path):
         raise NoAudioError("该视频没有音轨，无法识别背景音乐")
     video = next((s for s in data.get("streams", []) if s.get("codec_type") == "video"), None)
     fmt = data.get("format", {})
-    duration = float(fmt.get("duration") or audio.get("duration") or 0)
-    if not math.isfinite(duration) or duration <= 0:
+    duration = _number(fmt.get("duration")) or _number(audio.get("duration"))
+    if duration <= 0:
         raise MediaError("无法读取有效时长")
-    origin = float((video or {}).get("start_time") or fmt.get("start_time") or 0)
-    offset = float(audio.get("start_time") or origin) - origin if video else 0.0
-    return MediaInfo(duration, audio.get("codec_name", "未知"),
-                     int(audio.get("sample_rate", 0)), int(audio.get("channels", 0)), offset)
+    origin = _number((video or {}).get("start_time"), _number(fmt.get("start_time")))
+    offset = _number(audio.get("start_time"), origin) - origin if video else 0.0
+    return MediaInfo(
+        duration,
+        audio.get("codec_name", "未知"),
+        int(_number(audio.get("sample_rate"))),
+        int(_number(audio.get("channels"))),
+        offset,
+    )
 
 
-def extract_audio(source, target, info=None):
+def extract_audio(source: PathLike, target: PathLike, info: MediaInfo | None = None) -> Path:
     """PCM16 / 16kHz / 单声道，保留首音轨相对视频起点的延迟。"""
     info = info or probe(source)
     filters = ["aresample=16000", "asetpts=PTS-STARTPTS"]
@@ -77,13 +112,29 @@ def extract_audio(source, target, info=None):
     elif info.audio_offset < 0:
         filters += [f"atrim=start={-info.audio_offset:.6f}", "asetpts=PTS-STARTPTS"]
     filters += ["apad", f"atrim=duration={info.duration:.6f}"]
-    run_ffmpeg(["-i", Path(source).resolve(), "-map", "0:a:0", "-vn", "-af", ",".join(filters),
-                "-ac", 1, "-ar", 16000, "-c:a", "pcm_s16le", target],
-               timeout=max(600, info.duration * 2))
+    run_ffmpeg(
+        [
+            "-i",
+            Path(source).resolve(),
+            "-map",
+            "0:a:0",
+            "-vn",
+            "-af",
+            ",".join(filters),
+            "-ac",
+            1,
+            "-ar",
+            16000,
+            "-c:a",
+            "pcm_s16le",
+            target,
+        ],
+        timeout=max(600, info.duration * 2),
+    )
     return Path(target)
 
 
-def windows(duration, window, step):
+def windows(duration: float, window: float, step: float) -> list[tuple[float, float]]:
     if not (duration > 0 and 0 < step <= window):
         raise ValueError("无效的时长或切片参数")
     result = []
@@ -98,7 +149,7 @@ def windows(duration, window, step):
     return result
 
 
-def slice_wav(source, target, start, end):
+def slice_wav(source: PathLike, target: PathLike, start: float, end: float) -> Path:
     """从已标准化的 WAV 精确按采样点切片，原始时间由调用方保存。"""
     if start < 0 or end <= start:
         raise MediaError("切片起止时间无效")
@@ -113,15 +164,38 @@ def slice_wav(source, target, start, end):
     return Path(target)
 
 
-def preview_clip(source, target, start, end):
+def preview_clip(source: PathLike, target: PathLike, start: float, end: float) -> Path:
     """兼容 MOV/HEVC 的短 MP4 预览，无需保留临时识别音频。"""
-    run_ffmpeg(["-ss", max(0, start), "-i", Path(source).resolve(), "-t", max(0.1, end-start),
-                "-map", "0:v:0?", "-map", "0:a:0?", "-vf", "scale=960:540:force_original_aspect_ratio=decrease:force_divisible_by=2",
-                "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-movflags", "+faststart", target])
+    run_ffmpeg(
+        [
+            "-ss",
+            max(0, start),
+            "-i",
+            Path(source).resolve(),
+            "-t",
+            max(0.1, end - start),
+            "-map",
+            "0:v:0?",
+            "-map",
+            "0:a:0?",
+            "-vf",
+            "scale=960:540:force_original_aspect_ratio=decrease:force_divisible_by=2",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-movflags",
+            "+faststart",
+            target,
+        ]
+    )
     return Path(target)
 
 
-def timecode(seconds):
+def timecode(seconds: float) -> str:
     total = max(0, round(seconds * 1000))
-    return f"{total//3600000:02d}:{total//60000%60:02d}:{total//1000%60:02d}.{total%1000:03d}"
+    return f"{total // 3600000:02d}:{total // 60000 % 60:02d}:{total // 1000 % 60:02d}.{total % 1000:03d}"
