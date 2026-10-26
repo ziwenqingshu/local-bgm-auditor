@@ -2,7 +2,14 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 with_shazam=0
-if [[ "${1:-}" == "--with-shazam" ]]; then with_shazam=1; fi
+with_dev=0
+for arg in "$@"; do
+  case "$arg" in
+    --with-shazam) with_shazam=1 ;;
+    --dev) with_dev=1 ;;
+    *) echo "未知参数：$arg（可用：--with-shazam、--dev）"; exit 1 ;;
+  esac
+done
 echo "操作系统：$(uname -s)。安装 Python 3.12 本地环境。"
 if command -v uv >/dev/null 2>&1; then
   uv python install 3.12
@@ -39,5 +46,6 @@ fi
 requirements=requirements.txt
 if [[ "$with_shazam" == 1 ]]; then requirements=requirements-shazam.txt; fi
 "${installer[@]}" -r "$requirements"
+if [[ "$with_dev" == 1 ]]; then "${installer[@]}" -r requirements-dev.txt; fi
 .venv/bin/python scripts/check_environment.py
 echo "安装完成。运行 ./start.sh，然后打开 http://127.0.0.1:8501"
