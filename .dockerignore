@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+data
+docs
+tests
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.mypy_cache
+*.zip
+*.mp3
+*.wav
+*.flac
+*.mp4
+*.mov
